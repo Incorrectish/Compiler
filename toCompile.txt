@@ -2,4 +2,9 @@
 will it flag this, no matter what
 test */
 // also a comment
-let x = 6;
+let x: mut int = 5;
+let z = 0;
+let r: mut = z;
+let u: mut string = "hello";
+let c: mut string[] = [x: o => u+o*x+"stuff"];
+let n: int[] = [1, 2, 3, 4, 5, 6, 7];
