@@ -1,0 +1,4 @@
+    let x: mut int = 5;
+    let y: mut = 7;
+    let c: mut string = [1, 2, 3, 4, 5, 6];
+    let x = int[x: i -> i*i];

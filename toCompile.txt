@@ -1,0 +1,5 @@
+/* this is a comment
+will it flag this, no matter what
+test */
+// also a comment
+let x = 6;
