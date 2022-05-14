@@ -1,13 +1,2 @@
-/* this is a comment
-will it flag this, no matter what
-test */
-// also a comment
-let x: mut int = 5;
-let z = 0;
-let q = 'h';
-let t: mut = "=hi=";
-let i = "hello";
-let y = z;
-let k = Object(1, 2, 3);
-let j = Object(1, "hello");
-let f = Object('h', "hello");
+let z = readLine();
+println(z);

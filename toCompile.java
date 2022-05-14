@@ -1,13 +1,40 @@
-public class toCompile {
+import java.util.*;
+import java.io.*;public class toCompile {
 	 public static void main(String[] args) {
-int x = 5;
-final int z = 0;
-final char q = 'h';
-String t = "=hi=";
-final String i = "hello";
-final int y = z;
-final Object k = new Object(1, 2, 3);
-final Object j = new Object(1, "hello");
-final Object f = new Object('h', "hello");
+		final String z = readLine();
+		System.out.println(z);
 	}
+	public static String readLine() {
+		Scanner scanner = new Scanner(System.in);
+		return scanner.nextLine();
+	}
+
+	public static int readInt() {
+		Scanner scanner = new Scanner(System.in);
+		return scanner.nextInt();
+	}
+
+	public static String readLine(String message) {
+		System.out.println(message);
+		Scanner scanner = new Scanner(System.in);
+		return scanner.nextLine();
+	}
+
+	public static int readInt(String message) {
+		System.out.println(message);
+		Scanner scanner = new Scanner(System.in);
+		return scanner.nextInt();
+	}
+
+		public static double readDouble() {
+		Scanner scanner = new Scanner(System.in);
+		return scanner.nextDouble();
+}
+
+	public static double readDouble(String message) {
+		System.out.println(message);
+		Scanner scanner = new Scanner(System.in);
+		return scanner.nextDouble();
+	}
+
 }
