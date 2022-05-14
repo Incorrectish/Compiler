@@ -4,7 +4,10 @@ test */
 // also a comment
 let x: mut int = 5;
 let z = 0;
-let r: mut = z;
-let u: mut string = "hello";
-let c: mut string[] = [x: o => u+o*x+"stuff"];
-let n: int[] = [1, 2, 3, 4, 5, 6, 7];
+let q = 'h';
+let t: mut = "hi";
+let i = "hello";
+let y = z;
+let k = Object(1, 2, 3);
+let j = Object(1, "hello");
+let f = Object('h', "hello");
