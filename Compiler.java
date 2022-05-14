@@ -52,7 +52,6 @@ public class Compiler {
         out.write("}\n");
         br.close();
         out.close();
-        System.out.println(variableTypes.get("z"));
         System.out.println("Compiled "+line+" => "+compiled.getName());
     }
 
@@ -174,7 +173,11 @@ public class Compiler {
             // let x: mut = 5;
             if(tokens[2].equals("mut")) {
                 //when look for the type, the entire left side(let x: mut) is useless
-                String type = inferType(inputLine.split("=")[1]);
+                String[] split = inputLine.split("=");
+                StringBuilder rightHandSide = new StringBuilder();
+                for(int i = 1; i< split.length; i++)
+                    rightHandSide.append(split[i]);
+                String type = inferType(rightHandSide.toString());
                 variableTypes.put(name.trim(), type.trim());
                 expression += (type + tokens[1].substring(0, tokens[1].length() - 1)+" ");
                 for(int i = 3; i<tokens.length; i++)
@@ -183,7 +186,11 @@ public class Compiler {
             // if the variable is not explicitly declared mutable
             // let x = 5;
             else {
-                String type = inferType(inputLine.split("=")[1]);
+                String[] split = inputLine.split("=");
+                StringBuilder rightHandSide = new StringBuilder();
+                for(int i = 1; i< split.length; i++)
+                    rightHandSide.append(split[i]);
+                String type = inferType(rightHandSide.toString());
                 expression += ("final "+ type + tokens[1]+" ");
                 variableTypes.put(name.trim(), type.trim());
                 for(int i = 2; i<tokens.length; i++)
@@ -247,9 +254,12 @@ public class Compiler {
             String objectName = object.group(0).substring(0, object.group(0).length()-1);
             if(objectNames.contains(objectName)) {
                 String[] sides = expression.split("=");
+                StringBuilder rhssb = new StringBuilder();
+                for(int i = 1; i< sides.length; i++)
+                    rhssb.append(sides[i]);
                 sides[0] = sides[0].trim();
-                sides[1] = sides[1].trim();
-                expression = sides[0]+" = new "+sides[1];
+                String rhs = rhssb.toString().trim();
+                expression = sides[0]+" = new "+rhs;
             }
         }
         return expression;
@@ -283,12 +293,6 @@ public class Compiler {
 
     // THIS MUST BE SUBORDINATE TO STRING AS IT WILL CLASSIFY STRINGS AS INTS, MEANING YOU MUST CLASSIFY STRINGS BEFORE USING THIS
     public static boolean isInt(String rightHandSide) {
-        System.out.println(rightHandSide);
-        if(variableTypes.containsKey(rightHandSide)) {
-            System.out.println(variableTypes.get(rightHandSide));
-        } else {
-            System.out.println("not here");
-        }
         Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_-]\\(");
         Matcher object = objectPattern.matcher(rightHandSide);
         Pattern isDouble = Pattern.compile("\\d\\.\\d]");

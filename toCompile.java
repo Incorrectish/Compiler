@@ -3,7 +3,7 @@ public class toCompile {
 int x = 5;
 final int z = 0;
 final char q = 'h';
-String t = "hi";
+String t = "=hi=";
 final String i = "hello";
 final int y = z;
 final Object k = new Object(1, 2, 3);

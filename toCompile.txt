@@ -5,7 +5,7 @@ test */
 let x: mut int = 5;
 let z = 0;
 let q = 'h';
-let t: mut = "hi";
+let t: mut = "=hi=";
 let i = "hello";
 let y = z;
 let k = Object(1, 2, 3);
