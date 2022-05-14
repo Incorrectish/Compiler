@@ -34,7 +34,7 @@ public class Compiler {
         String[] lines = page.split(";");
         PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(compiled)));
         if(standard) {
-            out.write("import java.util.*;\nimport java.io.*;");
+            out.write("import java.util.*;\nimport java.io.*;\n");
             variableTypes.put("readLine()", "String");
             variableTypes.put("readInt()", "int");
             variableTypes.put("readDouble()", "int");
