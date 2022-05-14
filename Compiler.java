@@ -3,6 +3,7 @@ import java.util.*;
 import java.util.regex.*;
 public class Compiler {
     static HashMap<String, String> variableTypes = new HashMap<String, String>();
+    static HashSet<String> functionDefinitions = new HashSet<>();
     static HashSet<String> objectNames = new HashSet<>();
     static boolean standard = true;
 
@@ -17,15 +18,16 @@ public class Compiler {
         // Reading the file
         String page = readLines(line, macros, dependencies, libraries);
         //removing comments in the form /* */ regular expression. Change it later.
-         String regex = "/\\*[^~]*\\*/";
-         Pattern pattern = Pattern.compile(regex);
-         Matcher matcher = pattern.matcher(page);
+        String regex = "/\\*[^~]*\\*/";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(page);
         page = matcher.replaceAll("");
         String className = line.split("\\.")[0];
         //replacing macros, switches out the first stuff with the target.
         for(String macro: macros.keySet()) {
             page = page.replace(macro, macros.get(macro));
         }
+        captureFunctions(page);
         // Creating compiler target file
         File compiled = new File(className+".java");
         compiled.createNewFile();
@@ -41,26 +43,35 @@ public class Compiler {
         }
         //write libraries, also you gotta figure out a language name
         for(String library: libraries)
-            out.write(library.replace("language", "java")+"\n");
+            out.write(library.replace("I", "java")+"\n");
         //boiler plate
         out.write("public class "+className+" {\n");
-        out.write("\t public static void main(String[] args) {\n");
+//        out.write("\t public static void main(String[] args) {\n");
+
+        /*
+        * Most likely deprecating this
         for (String s : lines)
             out.write("\t\t"+evaluateStatement(s.trim()).trim() + ";\n");
+        */
+
         // Writing to the file
         //creating wrapper text for class and main
 
         // Creating actual java program
 
         //Splitting the input into the tokens, and statements to be evaluated, look for keywords: loop, for, while until '}'
-       // String[] code = page.split("\\.");
+        // String[] code = page.split("\\.");
         //for(String i: code)
-          //  out.print("\t\t"+evaluate(i)+"\n");
+        //  out.print("\t\t"+evaluate(i)+"\n");
         //first split on {}, {} blocks are the most important in terms of precedence
         //String[] code = bracketSplit(page);
 
         // Ending wrapper text
+
+        /*
         out.write("\t}\n");
+        */
+
         if(standard) {
             out.write("\tpublic static String readLine() {\n");
             out.write("\t\tScanner scanner = new Scanner(System.in);\n");
@@ -96,14 +107,14 @@ public class Compiler {
     }
 
     /*
-    * Our readline function
-    * Goes through every line in the file
-    * if the line begins with "no std" then sets global boolean to false so
-    * that the readline() function and java.util.*;/java.io.*; libraries are not imported
-    * #define lines create a macro that replaces all words with another word
-    * import does what you would expect
-    * use signals object files, not libraries being used so they can be compiled
-    *
+     * Our readline function
+     * Goes through every line in the file
+     * if the line begins with "no std" then sets global boolean to false so
+     * that the readline() function and java.util.*;/java.io.*; libraries are not imported
+     * #define lines create a macro that replaces all words with another word
+     * import does what you would expect
+     * use signals object files, not libraries being used so they can be compiled
+     *
      */
     public static String readLines(String filename, HashMap<String, String> macros, ArrayList<String> dependencies, HashSet<String> libraries) throws IOException {
         BufferedReader br  = new BufferedReader(new FileReader(filename));
@@ -129,15 +140,16 @@ public class Compiler {
                 macros.put(macro[0].trim(), macro[1].trim());
             }
             //if the line is not a comment
-            else if ((line = line.trim()).length() >= 2 && (line.charAt(0) != '/' || line.charAt(1) != '/'))
-                page.append(line);
+            else if (((line = line.trim()).length() >= 2 && (line.charAt(0) != '/' || line.charAt(1) != '/')) || line.equals("{") || line.equals("}")) {
+                page.append(line).append("\n");
+            }
         }
         br.close();
         return page.toString();
     }
 
     /*
-    * Evaluates every line of input. Extremely basic and not really working now
+     * Evaluates every line of input. Extremely basic and not really working now
      * Next work on standard in and out after variables are done: with lambdas too :(
      * stdin should be like var x = readInt("Input name");
      * stdout should be like print(); and println();
@@ -181,7 +193,7 @@ public class Compiler {
         String type;
 //        Pattern objectNotString = Pattern.compile("[a-zA-Z\\d$_-]\\(+[^~]*\"[^\"]*\"");
 //        Matcher matcher = objectNotString.matcher(rightHandSide);
-        if(rightHandSide.contains("if(")) {
+        if(rightHandSide.contains("?")) {
             // this is a ternary operator
             type = "var";
         }
@@ -331,10 +343,10 @@ public class Compiler {
         }
         return expression;
     }
-   /**/
+    /**/
     /*
-    * These methods are responsible for figuring out whether the right hand side would evaluate to a string, char, boolean, double, or int
-    */
+     * These methods are responsible for figuring out whether the right hand side would evaluate to a string, char, boolean, double, or int
+     */
     public static boolean isChar(String rightHandSide) {
         // same idea except with ' for char, these two are the easiest to ascertain
         Pattern objectNotChar = Pattern.compile("[a-zA-Z\\d$_\\-\\<\\>]\\(+[^~]*'[^']*'");
@@ -409,11 +421,98 @@ public class Compiler {
     }
 
     /**/
-    public static String[] bracketSplit(String input) {
-        int openingBrackets = 0, closingBrackets = 0;
-        for(int i = 0; i < input.length(); i++) {
-            //
+    public static void captureFunctions(String page) {
+        boolean functionsRemaining = true;
+        while (functionsRemaining) {
+            int openingBrackets = 0, closingBrackets = 0;
+            if (page.contains("pub stat fn")) {
+                StringBuilder functionBuilder = new StringBuilder();
+                int begin = page.indexOf("pub stat fn");
+                begin = page.indexOf("n", begin)+1;
+                functionBuilder.append("pub stat fn");
+                while(page.charAt(begin) != '{') {
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                }
+                do {
+                    if(page.charAt(begin) == '{') {
+                        openingBrackets++;
+                    } else if(page.charAt(begin) == '}') {
+                        closingBrackets++;
+                    }
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                } while(openingBrackets > closingBrackets);
+                String function = functionBuilder.toString();
+                functionDefinitions.add(function);
+                page = page.replace(function, "");
+            } else if (page.contains("pub fn")) {
+                StringBuilder functionBuilder = new StringBuilder();
+                int begin = page.indexOf("pub fn");
+                begin = page.indexOf("n", begin)+1;
+                functionBuilder.append("pub fn");
+                while(page.charAt(begin) != '{') {
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                }
+                do {
+                    if(page.charAt(begin) == '{') {
+                        openingBrackets++;
+                    } else if(page.charAt(begin) == '}') {
+                        closingBrackets++;
+                    }
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                } while(openingBrackets > closingBrackets);
+                String function = functionBuilder.toString();
+                functionDefinitions.add(function);
+                page = page.replace(function, "");
+            } else if (page.contains("stat fn")) {
+                StringBuilder functionBuilder = new StringBuilder();
+                int begin = page.indexOf("stat fn");
+                begin = page.indexOf("n", begin)+1;
+                functionBuilder.append("stat fn");
+                while(page.charAt(begin) != '{') {
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                }
+                do {
+                    if(page.charAt(begin) == '{') {
+                        openingBrackets++;
+                    } else if(page.charAt(begin) == '}') {
+                        closingBrackets++;
+                    }
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                } while(openingBrackets > closingBrackets);
+                String function = functionBuilder.toString();
+                functionDefinitions.add(function);
+                page = page.replace(function, "");
+            } else if(page.contains("fn")) {
+                StringBuilder functionBuilder = new StringBuilder();
+                int begin = page.indexOf("fn");
+                begin = page.indexOf("n", begin)+1;
+                functionBuilder.append("fn");
+                while(page.charAt(begin) != '{') {
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                }
+                do {
+                    if(page.charAt(begin) == '{') {
+                        openingBrackets++;
+                    } else if(page.charAt(begin) == '}') {
+                        closingBrackets++;
+                    }
+                    functionBuilder.append(page.charAt(begin));
+                    begin++;
+                } while(openingBrackets > closingBrackets);
+                String function = functionBuilder.toString();
+                functionDefinitions.add(function);
+                page = page.replace(function, "");
+            } else /* no functions remaining */ {
+                functionsRemaining = false;
+            }
         }
-        return new String[]{"hi"};
+        System.out.println(page);
     }
 }

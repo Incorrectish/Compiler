@@ -1,2 +1,8 @@
-let z = readLine();
-println(z);
+fn main() {
+    println("hello");
+    println(add(2, 4));
+}
+
+fn add(a: int, b: int) {
+    return a+b;
+}

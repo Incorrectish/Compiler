@@ -1,9 +1,6 @@
 import java.util.*;
-import java.io.*;public class toCompile {
-	 public static void main(String[] args) {
-		final String z = readLine();
-		System.out.println(z);
-	}
+import java.io.*;
+public class toCompile {
 	public static String readLine() {
 		Scanner scanner = new Scanner(System.in);
 		return scanner.nextLine();
