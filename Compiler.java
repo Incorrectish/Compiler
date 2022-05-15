@@ -182,23 +182,14 @@ public class Compiler {
         if(inputLine.startsWith("let")) {
             String sentInput = replace.replace("<double>", "<Double>").replace("string[]", "String[]");
             sentInput = evaluateRHS(sentInput);
-            expression = evaluateAssignment(sentInput, sentInput.split(" "));
+            expression = checkObjects(evaluateAssignment(sentInput, sentInput.split(" ")));
         } else if(inputLine.startsWith("print(") || inputLine.startsWith("println(")) {
             //get the implicit arrays.tostring
-            expression = "System.out."+inputLine;
+            expression = "System.out."+evaluateRHS(inputLine);
         } else if((inputLine.contains(" = "))) {
             String sentInput = replace.replace("<double>", "<Double>").replace("string[]", "String[]");
-            String[] sides = sentInput.split("=");
-            String lhs = sides[0];
-            StringBuilder rhsBuilder = new StringBuilder();
-            for(int i = 1; i< sides.length; i++)
-                rhsBuilder.append(sides[i]);
-            String rhs = rhsBuilder.toString();
-            // right hand side stuff
-           rhs = evaluateRHS(rhs);
-            //
             // left hand side stuff
-           expression = evaluateLHS(inputLine, expression, rhs, lhs);
+           expression = checkObjects(evaluateLHS(sentInput));
             //
         } else if(inputLine.contains("fn ")) {
             inputLine.replace("string", "String");
@@ -265,7 +256,17 @@ public class Compiler {
         } else {
             expression = inputLine;
         }
-        return expression;
+        return evaluateLHS(expression);
+    }
+
+    private static String checkObjects(String inputLine) {
+        Pattern pattern = Pattern.compile("[\\w<>]+\\(");
+        Matcher matcher = pattern.matcher(inputLine);
+        if(matcher.find()) {
+            int toSplit = inputLine.indexOf("=");
+            inputLine = inputLine.substring(0, toSplit+1) + " new "+inputLine.substring(toSplit+1);
+        }
+        return inputLine;
     }
 
     private static String evaluateConditional(String inputLine) {
@@ -321,60 +322,76 @@ public class Compiler {
         return expression;
     }
 
-    public static String evaluateLHS(String inputLine, String expression, String rhs, String lhs) {
-        Pattern objectPatternLHS = Pattern.compile("([\\w]+ | [\\w]+\\(\\))::[\\w]+");
-        Matcher objectMatcherLHS = objectPatternLHS.matcher(rhs);
-        while(objectMatcherLHS.find()) {
-            String objectVar = objectMatcherLHS.group(0);
-            String[] tokens = objectVar.split("::");
-            expression = tokens[0]+".set"+tokens[1].substring(0, 1).toUpperCase()+tokens[1].substring(1)+"("+rhs+")";
-        }
-        Pattern arrayPatternLHS = Pattern.compile("([\\w]+ | [\\w]+\\(\\)):\\[[\\w]+\\]");
-        Matcher arrayMatcherLHS = arrayPatternLHS.matcher(lhs);
-        while(arrayMatcherLHS.find()) {
-            String arrayVar = objectMatcherLHS.group(0);
-            String[] tokens = arrayVar.split(":\\[");
-            StringBuilder sub = new StringBuilder();
-            tokens[1] = tokens[1].substring(0, tokens[1].length()-1);
-            if(tokens.length > 2)
-                for(int i = 2; i< tokens.length; i++)
-                    sub.append(tokens[i]);
-            String type = variableTypes.get(tokens[0]);
-            //tokens[0]+".replace("+tokens[1]+", "+rhs+")"
-            if(type.contains("HashMap")) {
-                expression = tokens[0]+".replace("+tokens[1]+", "+rhs+")";
-            } else if(type.contains("ArrayList")) {
-                expression = tokens[0]+".set("+tokens[1]+", "+rhs+")";
+    public static String evaluateLHS(String sentInput) {
+        Pattern collections = Pattern.compile("[\\w\\.:\\[\\]]+:[\\w\\.:\\[\\]]+\\s?=\\s?[\\w\\.:\\[\\]\"]+");
+        Matcher collectionMatcher = collections.matcher(sentInput);
+        String expr = "";
+        ArrayList<String> matches = new ArrayList<>();
+        if(collectionMatcher.find()) {
+            expr = collectionMatcher.group(0);
+        String[] sides = expr.split("=");
+        String lhs = sides[0];
+        StringBuilder rhsBuilder = new StringBuilder(sides[1]);
+        if(sides.length > 2)
+            for(int i = 2; i<sides.length; i++)
+                rhsBuilder.append(sides[1]);
+        String rhs = rhsBuilder.toString();
+        rhs = evaluateRHS(rhs);
+        Pattern namePattern = Pattern.compile("[\\w]+:\\[");
+        Matcher nameMatcher = namePattern.matcher(lhs);
+        String name = "";
+        if(nameMatcher.find())
+            name = nameMatcher.group(0).substring(0, nameMatcher.group(0).length()-2);
+        System.out.println(name+"\n"+sentInput.substring(sentInput.indexOf(name)-2, sentInput.indexOf(name)));
+        if(sentInput.substring(sentInput.indexOf(name)-2, sentInput.indexOf(name)).equals("::"))
+            name = "get"+name.substring(0, 1).toUpperCase()+name.substring(1);
+        Pattern indexPattern = Pattern.compile("(::[\\w]+|:\\[[\\w\\.\"\\(\\)]+\\])");
+        Matcher indexMatcher = indexPattern.matcher(lhs);
+        while(indexMatcher.find())
+            matches.add(indexMatcher.group(0));
+        for(int i = 0; i<matches.size()-1;i++) {
+            if(matches.get(i).startsWith("::")) {
+                String objectVar = matches.get(i).substring(2);
+                String getter = ".get"+objectVar.substring(0, 1).toUpperCase()+objectVar.substring(1)+"()";
+                lhs = lhs.replaceFirst("::"+objectVar, getter);
+            } else {
+                String arrayVar = matches.get(i);
+                String content = arrayVar.substring(2, arrayVar.length()-1);
+                lhs = lhs.replace(arrayVar, (".get("+content+")"));
             }
         }
-        return expression;
+        if(matches.get(matches.size()-1).startsWith("::")) {
+            String objectVar = matches.get(matches.size()-1).substring(2);
+            String setter = ".set"+objectVar.substring(0, 1).toUpperCase()+objectVar.substring(1)+"("+rhs+")";
+            lhs = lhs.replaceFirst("::"+objectVar, setter);
+        } else {
+            String arrayVar = matches.get(matches.size()-1);
+            String content = arrayVar.substring(2, arrayVar.length()-1);
+            if(variableTypes.get(name).contains("ArrayList")) {
+                lhs = lhs.replace(arrayVar, (".set("+content+", "+rhs.trim()+")"));
+            } else {
+                lhs = lhs.replace(arrayVar, (".replace("+content+", "+rhs.trim()+")"));
+            }
+        }
+        sentInput = lhs;
+        }
+        return sentInput;
     }
 
     public static String evaluateRHS(String sentInput) {
-        Pattern objectPattern = Pattern.compile("([\\w]+ | [\\w]+\\(\\))::[\\w]+");
+        Pattern objectPattern = Pattern.compile("::[\\w]+");
         Matcher objectMatcher = objectPattern.matcher(sentInput);
         while(objectMatcher.find()) {
-            String objectVar = objectMatcher.group(0);
-            String[] tokens = objectVar.split("::");
-            String getter = tokens[0]+".get"+tokens[1].substring(0, 1).toUpperCase()+tokens[1].substring(1)+"()";
-            sentInput = sentInput.replace(objectVar, getter);
+            String objectVar = objectMatcher.group(0).substring(2);
+            String getter = ".get"+objectVar.substring(0, 1).toUpperCase()+objectVar.substring(1)+"()";
+            sentInput = sentInput.replaceFirst("::"+objectVar, getter);
         }
-        Pattern arrayPattern = Pattern.compile("([\\w]+ | [\\w]+\\(\\)):\\[[\\w]+\\]");
+        Pattern arrayPattern = Pattern.compile(":\\[[\\w\\.\"\\(\\)]+\\]");
         Matcher arrayMatcher = arrayPattern.matcher(sentInput);
         while(arrayMatcher.find()) {
-            String arrayVar = objectMatcher.group(0);
-            String[] tokens = arrayVar.split(":\\[");
-            StringBuilder sub = new StringBuilder();
-            tokens[1] = tokens[1].substring(0, tokens[1].length()-1);
-            if(tokens.length > 2)
-                for(int i = 2; i< tokens.length; i++)
-                    sub.append(tokens[i]);
-            String type = variableTypes.get(tokens[0]);
-            if(type.contains("HashMap")) {
-                sentInput = sentInput.replace(arrayVar, (tokens[0]+".get("+tokens[1]+")"+sub.toString()));
-            } else if(type.contains("ArrayList")) {
-                sentInput = sentInput.replace(arrayVar, (tokens[0]+".get("+tokens[1]+")"+sub.toString()));
-            }
+            String arrayVar = arrayMatcher.group(0).trim();
+            String content = arrayVar.substring(2, arrayVar.length()-1);
+            sentInput = sentInput.replace(arrayVar, (".get("+content+")"));
         }
         return sentInput;
     }

@@ -2,15 +2,11 @@ import java.util.*;
 import java.io.*;
 public class toCompile {
 public static void main(String[] args) {
-for(int i = (0); i<= 100;i++) {
-if(i%5 == 0 && i%3 ==0) {
-System.out.println("fizzbuzz");
-} else if(i%5 == 0) {
-System.out.println("buzz");
-} else if(i%3 == 0) {
-System.out.println("fizz");
-}
-}
+final var al = new  ArrayList<Integer>();
+al.add(1);
+al.add(2);
+al.add(3);
+System.out.println(al.get(1));
 }
 	public static String readLine() {
 		Scanner scanner = new Scanner(System.in);

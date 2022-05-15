@@ -1,12 +1,8 @@
 no std;
 fn main() {
-    for i: [0, 100] {
-        if i%5 == 0 && i%3 ==0 {
-            println("fizzbuzz");
-        } else if i%5 == 0 {
-            println("buzz");
-        } else if i%3 == 0 {
-            println("fizz");
-        }
-    }
+    let al = ArrayList<int>();
+    al.add(1);
+    al.add(2);
+    al.add(3);
+    println(al:[1]);
 }
