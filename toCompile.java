@@ -1,16 +1,16 @@
 import java.util.*;
 import java.io.*;
 public class toCompile {
-public static int add( int[] a) {
-int sum = 0;
-for(var i: a) {
-sum += i;
-}
-return sum;
-}
 public static void main(String[] args) {
-final int[] a = {1, 2, 3, 4, 5};
-System.out.println(add(a));
+for(int i = (0); i<= 100;i++) {
+if(i%5 == 0 && i%3 ==0) {
+System.out.println("fizzbuzz");
+} else if(i%5 == 0) {
+System.out.println("buzz");
+} else if(i%3 == 0) {
+System.out.println("fizz");
+}
+}
 }
 	public static String readLine() {
 		Scanner scanner = new Scanner(System.in);

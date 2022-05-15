@@ -1,11 +1,12 @@
+no std;
 fn main() {
-    let a: int[] = [1, 2, 3, 4, 5];
-    println(add(a));
-}
-pub stat fn add(a: int[]) => int {
-    let sum: mut = 0;
-    for i: a {
-        sum += i;
+    for i: [0, 100] {
+        if i%5 == 0 && i%3 ==0 {
+            println("fizzbuzz");
+        } else if i%5 == 0 {
+            println("buzz");
+        } else if i%3 == 0 {
+            println("fizz");
+        }
     }
-    return sum;
 }

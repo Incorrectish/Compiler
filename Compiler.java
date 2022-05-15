@@ -275,10 +275,17 @@ public class Compiler {
             String[] tokens = withinMatcher.group(0).split(":");
             String variable = tokens[0].trim();
             String[] bounds = tokens[1].split(",");
-            String within = "("+variable+(bounds[0].charAt(0) == '['? ">=": ">")+bounds[0].substring(1)+" && "+variable+(bounds[1].charAt(bounds[1].length()-1) == ']'? "<=": "<")+bounds[1].substring(0, bounds[1].length()-1)+")";
+            String within = "("+variable+(bounds[0].charAt(0) == '['? ">=": ">")+bounds[0].substring(2)+" && "+variable+(bounds[1].charAt(bounds[1].length()-1) == ']'? "<=": "<")+bounds[1].substring(0, bounds[1].length()-1)+")";
             inputLine = inputLine.replace(withinMatcher.group(0), within);
         }
         inputLine = evaluateRHS(inputLine);
+        if(inputLine.startsWith("if")) {
+            inputLine = inputLine.substring(0, 2)+"("+inputLine.substring(3, inputLine.length()-2)+") {";
+        } else if(inputLine.startsWith("else if")) {
+            inputLine = inputLine.substring(0, 7)+"("+inputLine.substring(8, inputLine.length()-2)+") {";
+        } else if(inputLine.startsWith("while")) {
+            inputLine = inputLine.substring(0, 5)+"("+inputLine.substring(6, inputLine.length()-2)+") {";
+        }
         return inputLine;
     }
 
@@ -290,18 +297,21 @@ public class Compiler {
 
     public static String evaluateForLoop(String inputLine) {
         String expression = "";
-        if(expression.contains(",")) {
+        if(inputLine.contains(",")) {
             expression += "for(int ";
             Pattern iterVarPattern = Pattern.compile("\\s[\\w]+:");
             Matcher iterVarMatcher = iterVarPattern.matcher(inputLine);
-            String iterVar = evaluateRHS(iterVarMatcher.group(0).trim().substring(0, iterVarMatcher.group(0).length()-1));
+            String iterVar = "";
+            if(iterVarMatcher.find())
+                iterVar = evaluateRHS(iterVarMatcher.group(0).trim().substring(0, iterVarMatcher.group(0).length()-2));
+            System.out.println(iterVar);
             expression+=iterVar;
             Pattern range = Pattern.compile("(\\[|\\()[\\w\\.]+,\\s[\\w\\.]+(\\]|\\))");
             Matcher rangeMatcher = range.matcher(inputLine);
             String[] startAndEnd = null;
             if(rangeMatcher.find())
                 startAndEnd = rangeMatcher.group(0).trim().split(",");
-            expression+=("= ("+(startAndEnd[0].charAt(0) == '[' ? startAndEnd[0]: startAndEnd[0]+"+1")+"); ");
+            expression+=(" = ("+(startAndEnd[0].charAt(0) == '[' ? startAndEnd[0].substring(1): startAndEnd[0].substring(1)+"+1")+"); ");
             expression+=(iterVar+(startAndEnd[1].charAt(startAndEnd[1].length()-1) == ']'? "<=": "<")+startAndEnd[1].substring(0, startAndEnd[1].length()-1)+";"+iterVar+"++) {");
         } else if(inputLine.contains(":")){
             expression += "for(var "+inputLine.substring(4, inputLine.length()-2)+") {";
