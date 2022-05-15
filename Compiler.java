@@ -10,7 +10,6 @@ public class Compiler {
     public static void main(String[] args) throws IOException {
         String line = args[0];
         //change this
-        objectNames.add("Object");
         //getting macros
         HashMap<String, String> macros = new HashMap<>();
         HashSet<String> libraries = new HashSet<>();
@@ -31,15 +30,17 @@ public class Compiler {
         // Creating compiler target file
         File compiled = new File(className+".java");
         compiled.createNewFile();
+        PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(compiled)));
+
+//        evaluateFunctions(compiled);
 
         //splitting the file on semicolons: to change later
         String[] lines = page.split(";");
-        PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(compiled)));
         if(standard) {
             out.write("import java.util.*;\nimport java.io.*;\n");
-            variableTypes.put("readLine()", "String");
-            variableTypes.put("readInt()", "int");
-            variableTypes.put("readDouble()", "int");
+            variableTypes.put("readLine", "String");
+            variableTypes.put("readInt", "int");
+            variableTypes.put("readDouble", "int");
         }
         //write libraries, also you gotta figure out a language name
         for(String library: libraries)
@@ -48,6 +49,16 @@ public class Compiler {
         out.write("public class "+className+" {\n");
 //        out.write("\t public static void main(String[] args) {\n");
 
+
+        //evaluating all the functions
+        for(String function: functionDefinitions) {
+            String[] statements = function.split("[\r\n]+");
+            for(String statement: statements) {
+                String state = evaluateStatement(statement.trim()).trim();
+                out.write(state+"\n");
+            }
+        }
+        //
         /*
         * Most likely deprecating this
         for (String s : lines)
@@ -164,29 +175,200 @@ public class Compiler {
      * objects to be finished after I actually implement objects lmfao
      */
     public static String evaluateStatement(String inputLine) {
-        // ARRAYS MUST BE TYPECAST PLS FIX NOT DONE
         String expression = "";
         // let x: mut int = 5 -> ["let", "x:", "mut", "int", "=", "5"]
-        String[] tokens = inputLine.split(" ");
         //checks if the statement is assignment
-        if(tokens[0].equals("let")) {
-            expression = evaluateAssignment(inputLine.trim(), tokens);
-        } else if(inputLine.length() >= 6 && (inputLine.startsWith("print(") || inputLine.startsWith("println("))) {
+        String replace = inputLine.trim().replace("<string>", "<String>").replace("<int>", "<Integer>");
+        if(inputLine.startsWith("let")) {
+            String sentInput = replace.replace("<double>", "<Double>").replace("string[]", "String[]");
+            sentInput = evaluateRHS(sentInput);
+            expression = evaluateAssignment(sentInput, sentInput.split(" "));
+        } else if(inputLine.startsWith("print(") || inputLine.startsWith("println(")) {
             //get the implicit arrays.tostring
             expression = "System.out."+inputLine;
-        } else if((inputLine.startsWith("stdin "))) {
-            //tenative, to fix
-            expression = "Scanner "+inputLine.substring(6) + "= new Scanner(System.in) ";
-        } else if(inputLine.startsWith("File")) {
-
+        } else if((inputLine.contains(" = "))) {
+            String sentInput = replace.replace("<double>", "<Double>").replace("string[]", "String[]");
+            String[] sides = sentInput.split("=");
+            String lhs = sides[0];
+            StringBuilder rhsBuilder = new StringBuilder();
+            for(int i = 1; i< sides.length; i++)
+                rhsBuilder.append(sides[i]);
+            String rhs = rhsBuilder.toString();
+            // right hand side stuff
+           rhs = evaluateRHS(rhs);
+            //
+            // left hand side stuff
+           expression = evaluateLHS(inputLine, expression, rhs, lhs);
+            //
+        } else if(inputLine.contains("fn ")) {
+            inputLine.replace("string", "String");
+          if(inputLine.contains("pub "))
+              expression+="public ";
+          else
+              expression+="private ";
+          if(inputLine.contains("stat "))
+              expression+="static ";
+          Pattern returnPattern = Pattern.compile("=>\\s[\\w]+");
+          Matcher returnMatcher = returnPattern.matcher(inputLine);
+          String returnType;
+          if(returnMatcher.find()) {
+              returnType = returnMatcher.group(0).substring(3);
+              expression+=returnType+" ";
+          }
+          else {
+              expression += "void ";
+              returnType = "void";
+          }
+          Pattern namePattern = Pattern.compile("[\\w]+\\s?\\(");
+          Matcher nameMatcher = namePattern.matcher(inputLine);
+          String name="";
+          if(nameMatcher.find())
+            name = nameMatcher.group(0).substring(0, nameMatcher.group(0).length()-1).trim();
+          expression+=name;
+          variableTypes.put(name, returnType);
+          if(inputLine.contains("()"))
+              expression+="() {";
+          else {
+              Pattern parameterPattern = Pattern.compile("\\([\\w:,\\s\\[\\]]+\\)");
+              Matcher parameterMatcher = parameterPattern.matcher(inputLine);
+              String parameters = "";
+              if(parameterMatcher.find())
+                  parameters = parameterMatcher.group(0);
+              expression+="(";
+              Pattern parameter = Pattern.compile("[\\w]+:\\s[\\w\\[\\]<>]+");
+              Matcher paramMatcher = parameter.matcher(parameters);
+              while(paramMatcher.find()) {
+                  String[] paramTypes = paramMatcher.group(0).split(":");
+                  expression+=(paramTypes[1]+" "+paramTypes[0]+", ");
+              }
+              expression = expression.substring(0, expression.length()-2)+") {";
+          }
+          if(inputLine.trim().equals("fn main() {") || inputLine.trim().equals("fn main () {"))
+              expression = "public static void main(String[] args) {";
+        } else if(inputLine.startsWith("for")) {
+            expression = evaluateForLoop(inputLine);
+        } else if(inputLine.startsWith("do")) {
+            expression = inputLine;
+        } else if(inputLine.startsWith("while")) {
+            expression = evaluateConditional(inputLine);
+        } else if(inputLine.startsWith("if")) {
+            expression = evaluateConditional(inputLine);
+        } else if(inputLine.startsWith("else if")) {
+            expression = evaluateConditional(inputLine);
+        } else if(inputLine.startsWith("else")) {
+            expression = inputLine;
+        } else if(inputLine.startsWith("}")) {
+            if(inputLine.trim().equals("}"))
+                expression = "}";
+            else
+                expression = "} "+evaluateConditional(inputLine.substring(1).trim());
+        } else {
+            expression = inputLine;
         }
         return expression;
     }
+
+    private static String evaluateConditional(String inputLine) {
+        Pattern withinPattern = Pattern.compile("[\\w\\.]+:\\s(\\[|\\()[\\w\\.]+,\\s[\\w\\.]+(\\]|\\))");
+        Matcher withinMatcher = withinPattern.matcher(inputLine);
+        while(withinMatcher.find()) {
+            String[] tokens = withinMatcher.group(0).split(":");
+            String variable = tokens[0].trim();
+            String[] bounds = tokens[1].split(",");
+            String within = "("+variable+(bounds[0].charAt(0) == '['? ">=": ">")+bounds[0].substring(1)+" && "+variable+(bounds[1].charAt(bounds[1].length()-1) == ']'? "<=": "<")+bounds[1].substring(0, bounds[1].length()-1)+")";
+            inputLine = inputLine.replace(withinMatcher.group(0), within);
+        }
+        inputLine = evaluateRHS(inputLine);
+        return inputLine;
+    }
+
     /**
      * Takes in the right hand side of a variable assignment and returns the type
      * Regular expressions to start by checking for int then char then double then String then object
      */
 //[a-zA-Z0-9$_-]{1}\(+[^~]*"[^"]*"
+
+    public static String evaluateForLoop(String inputLine) {
+        String expression = "";
+        if(expression.contains(",")) {
+            expression += "for(int ";
+            Pattern iterVarPattern = Pattern.compile("\\s[\\w]+:");
+            Matcher iterVarMatcher = iterVarPattern.matcher(inputLine);
+            String iterVar = evaluateRHS(iterVarMatcher.group(0).trim().substring(0, iterVarMatcher.group(0).length()-1));
+            expression+=iterVar;
+            Pattern range = Pattern.compile("(\\[|\\()[\\w\\.]+,\\s[\\w\\.]+(\\]|\\))");
+            Matcher rangeMatcher = range.matcher(inputLine);
+            String[] startAndEnd = null;
+            if(rangeMatcher.find())
+                startAndEnd = rangeMatcher.group(0).trim().split(",");
+            expression+=("= ("+(startAndEnd[0].charAt(0) == '[' ? startAndEnd[0]: startAndEnd[0]+"+1")+"); ");
+            expression+=(iterVar+(startAndEnd[1].charAt(startAndEnd[1].length()-1) == ']'? "<=": "<")+startAndEnd[1].substring(0, startAndEnd[1].length()-1)+";"+iterVar+"++) {");
+        } else if(inputLine.contains(":")){
+            expression += "for(var "+inputLine.substring(4, inputLine.length()-2)+") {";
+        } else {
+            expression = inputLine;
+        }
+        return expression;
+    }
+
+    public static String evaluateLHS(String inputLine, String expression, String rhs, String lhs) {
+        Pattern objectPatternLHS = Pattern.compile("([\\w]+ | [\\w]+\\(\\))::[\\w]+");
+        Matcher objectMatcherLHS = objectPatternLHS.matcher(rhs);
+        while(objectMatcherLHS.find()) {
+            String objectVar = objectMatcherLHS.group(0);
+            String[] tokens = objectVar.split("::");
+            expression = tokens[0]+".set"+tokens[1].substring(0, 1).toUpperCase()+tokens[1].substring(1)+"("+rhs+")";
+        }
+        Pattern arrayPatternLHS = Pattern.compile("([\\w]+ | [\\w]+\\(\\)):\\[[\\w]+\\]");
+        Matcher arrayMatcherLHS = arrayPatternLHS.matcher(lhs);
+        while(arrayMatcherLHS.find()) {
+            String arrayVar = objectMatcherLHS.group(0);
+            String[] tokens = arrayVar.split(":\\[");
+            StringBuilder sub = new StringBuilder();
+            tokens[1] = tokens[1].substring(0, tokens[1].length()-1);
+            if(tokens.length > 2)
+                for(int i = 2; i< tokens.length; i++)
+                    sub.append(tokens[i]);
+            String type = variableTypes.get(tokens[0]);
+            //tokens[0]+".replace("+tokens[1]+", "+rhs+")"
+            if(type.contains("HashMap")) {
+                expression = tokens[0]+".replace("+tokens[1]+", "+rhs+")";
+            } else if(type.contains("ArrayList")) {
+                expression = tokens[0]+".set("+tokens[1]+", "+rhs+")";
+            }
+        }
+        return expression;
+    }
+
+    public static String evaluateRHS(String sentInput) {
+        Pattern objectPattern = Pattern.compile("([\\w]+ | [\\w]+\\(\\))::[\\w]+");
+        Matcher objectMatcher = objectPattern.matcher(sentInput);
+        while(objectMatcher.find()) {
+            String objectVar = objectMatcher.group(0);
+            String[] tokens = objectVar.split("::");
+            String getter = tokens[0]+".get"+tokens[1].substring(0, 1).toUpperCase()+tokens[1].substring(1)+"()";
+            sentInput = sentInput.replace(objectVar, getter);
+        }
+        Pattern arrayPattern = Pattern.compile("([\\w]+ | [\\w]+\\(\\)):\\[[\\w]+\\]");
+        Matcher arrayMatcher = arrayPattern.matcher(sentInput);
+        while(arrayMatcher.find()) {
+            String arrayVar = objectMatcher.group(0);
+            String[] tokens = arrayVar.split(":\\[");
+            StringBuilder sub = new StringBuilder();
+            tokens[1] = tokens[1].substring(0, tokens[1].length()-1);
+            if(tokens.length > 2)
+                for(int i = 2; i< tokens.length; i++)
+                    sub.append(tokens[i]);
+            String type = variableTypes.get(tokens[0]);
+            if(type.contains("HashMap")) {
+                sentInput = sentInput.replace(arrayVar, (tokens[0]+".get("+tokens[1]+")"+sub.toString()));
+            } else if(type.contains("ArrayList")) {
+                sentInput = sentInput.replace(arrayVar, (tokens[0]+".get("+tokens[1]+")"+sub.toString()));
+            }
+        }
+        return sentInput;
+    }
+
     public static String inferType(String rightHandSide) {
         if(variableTypes.containsKey(rightHandSide))
             return variableTypes.get(rightHandSide);
@@ -209,8 +391,7 @@ public class Compiler {
         } else if(isBoolean(rightHandSide.trim())) {
             type = "boolean";
         } else /* is object */ {
-            // INDEX OUT OF BOUNDS ERROR HERE
-            Pattern objectNamePattern = Pattern.compile("[a-zA-Z\\d$-_<>]+\\(");
+            Pattern objectNamePattern = Pattern.compile("[a-zA-Z\\d$_<>]+\\(");
             Matcher objectName = objectNamePattern.matcher(rightHandSide);
             if(objectName.find()) {
                 type = objectName.group(0).substring(0, objectName.group(0).length() - 1) + " ";
@@ -327,7 +508,7 @@ public class Compiler {
             expression = expression.replace("[", "{").replace("]", "}");
             expression = expression.substring(0, expression.indexOf("{"))+"[]"+expression.substring(expression.indexOf("{")+2);
         }
-        Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_\\-\\<\\>]*\\(");
+        Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_<>]*\\(");
         Matcher object = objectPattern.matcher(inputLine);
         if(object.find()) {
             String objectName = object.group(0).substring(0, object.group(0).length()-1);
@@ -349,14 +530,14 @@ public class Compiler {
      */
     public static boolean isChar(String rightHandSide) {
         // same idea except with ' for char, these two are the easiest to ascertain
-        Pattern objectNotChar = Pattern.compile("[a-zA-Z\\d$_\\-\\<\\>]\\(+[^~]*'[^']*'");
+        Pattern objectNotChar = Pattern.compile("[a-zA-Z\\d$_<>]\\(+[^~]*'[^']*'");
         Matcher matcher = objectNotChar.matcher(rightHandSide);
         return !matcher.find() && rightHandSide.contains("'");
     }
     public static boolean isString(String rightHandSide) {
         //match Object(x, c, 2, z,"something") but not "something to distinguish between
         //object creation and just strings, using regex magic
-        Pattern objectNotString = Pattern.compile("[a-zA-Z\\d$_\\-\\<\\>]\\(+[^~]*\"[^\"]*\"");
+        Pattern objectNotString = Pattern.compile("[a-zA-Z\\d$_<>]\\(+[^~]*\"[^\"]*\"");
         Matcher matcher = objectNotString.matcher(rightHandSide);
         String[] tokens;
         boolean anyStrings = false;
@@ -372,7 +553,7 @@ public class Compiler {
 
     // THIS MUST BE SUBORDINATE TO STRING AS IT WILL CLASSIFY STRINGS AS INTS, MEANING YOU MUST CLASSIFY STRINGS BEFORE USING THIS
     public static boolean isInt(String rightHandSide) {
-        Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_\\-\\<\\>]\\(");
+        Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_<>]\\(");
         Matcher object = objectPattern.matcher(rightHandSide);
         Pattern isDouble = Pattern.compile("\\d\\.\\d]");
         Matcher matchDouble = isDouble.matcher(rightHandSide);
@@ -400,7 +581,7 @@ public class Compiler {
     }
 
     public static boolean isDouble(String rightHandSide) {
-        Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_\\-\\<\\>]\\(");
+        Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_<>]\\(");
         Matcher object = objectPattern.matcher(rightHandSide);
         Pattern isDouble = Pattern.compile("\\d\\.\\d]");
         Matcher matchDouble = isDouble.matcher(rightHandSide);
@@ -416,11 +597,24 @@ public class Compiler {
     public static boolean isBoolean(String rightHandSide) {
         if(rightHandSide.contains("if ")) return false;
         else {
-            return (rightHandSide.contains(">") && !rightHandSide.contains("<") || rightHandSide.contains("<") && !rightHandSide.contains(">")) || (rightHandSide.contains("||") || rightHandSide.contains(">=") || rightHandSide.contains("<=") || rightHandSide.contains("&&") || rightHandSide.contains(".equals()") || rightHandSide.equals("false") || rightHandSide.equals("true"));
+            return ((rightHandSide.contains(">") && !rightHandSide.contains("<")) || (rightHandSide.contains("<") && !rightHandSide.contains(">"))) || (rightHandSide.contains("||") || rightHandSide.contains(">=") || rightHandSide.contains("<=") || rightHandSide.contains("&&") || rightHandSide.contains(".equals()") || rightHandSide.equals("false") || rightHandSide.equals("true")) || rightHandSide.contains("!");
         }
     }
 
     /**/
+
+    public static void evaluateFunctions(File compiled) throws IOException {
+        PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(compiled)));
+        out.write("hi");
+        for(String function: functionDefinitions) {
+            String[] statements = function.split("[\r\n]+");
+            for(String statement: statements) {
+                String state = evaluateStatement(statement.trim()).trim();
+                out.write(state+"\n");
+            }
+        }
+        out.close();
+    }
     public static void captureFunctions(String page) {
         boolean functionsRemaining = true;
         while (functionsRemaining) {
@@ -513,6 +707,5 @@ public class Compiler {
                 functionsRemaining = false;
             }
         }
-        System.out.println(page);
     }
 }

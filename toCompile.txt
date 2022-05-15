@@ -1,8 +1,11 @@
 fn main() {
-    println("hello");
-    println(add(2, 4));
+    let a: int[] = [1, 2, 3, 4, 5];
+    println(add(a));
 }
-
-fn add(a: int, b: int) {
-    return a+b;
+pub stat fn add(a: int[]) => int {
+    let sum: mut = 0;
+    for i: a {
+        sum += i;
+    }
+    return sum;
 }
