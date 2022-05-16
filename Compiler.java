@@ -262,9 +262,9 @@ public class Compiler {
     private static String checkObjects(String inputLine) {
         Pattern pattern = Pattern.compile("[\\w<>]+\\(");
         Matcher matcher = pattern.matcher(inputLine);
-        if(matcher.find()) {
+        if(matcher.find() && !variableTypes.containsKey(matcher.group(0).substring(0, matcher.group(0).length()-1))) {
             int toSplit = inputLine.indexOf("=");
-            inputLine = inputLine.substring(0, toSplit+1) + " new "+inputLine.substring(toSplit+1);
+            inputLine = inputLine.substring(0, toSplit+1) + "new "+inputLine.substring(toSplit+1);
         }
         return inputLine;
     }
@@ -299,21 +299,26 @@ public class Compiler {
     public static String evaluateForLoop(String inputLine) {
         String expression = "";
         if(inputLine.contains(",")) {
-            expression += "for(int ";
+            expression += "for(var ";
             Pattern iterVarPattern = Pattern.compile("\\s[\\w]+:");
             Matcher iterVarMatcher = iterVarPattern.matcher(inputLine);
             String iterVar = "";
             if(iterVarMatcher.find())
                 iterVar = evaluateRHS(iterVarMatcher.group(0).trim().substring(0, iterVarMatcher.group(0).length()-2));
-            System.out.println(iterVar);
             expression+=iterVar;
+            Pattern iterConstantPattern = Pattern.compile(";\\s?[\\w-]+\\s?\\{");
+            Matcher iterConstantMatcher = iterConstantPattern.matcher(inputLine);
+            String iterConstant = ";1 {";
+            if(iterConstantMatcher.find())
+                iterConstant = iterConstantMatcher.group(0);
             Pattern range = Pattern.compile("(\\[|\\()[\\w\\.]+,\\s[\\w\\.]+(\\]|\\))");
             Matcher rangeMatcher = range.matcher(inputLine);
             String[] startAndEnd = null;
             if(rangeMatcher.find())
                 startAndEnd = rangeMatcher.group(0).trim().split(",");
-            expression+=(" = ("+(startAndEnd[0].charAt(0) == '[' ? startAndEnd[0].substring(1): startAndEnd[0].substring(1)+"+1")+"); ");
-            expression+=(iterVar+(startAndEnd[1].charAt(startAndEnd[1].length()-1) == ']'? "<=": "<")+startAndEnd[1].substring(0, startAndEnd[1].length()-1)+";"+iterVar+"++) {");
+            String iterConstantSubStr = iterConstant.substring(1, iterConstant.length() - 2);
+            expression+=(" = ("+(startAndEnd[0].charAt(0) == '[' ? startAndEnd[0].substring(1): startAndEnd[0].substring(1)+"+"+ iterConstantSubStr)+"); ");
+            expression+=(iterVar+(startAndEnd[1].charAt(startAndEnd[1].length()-1) == ']'? (iterConstantSubStr.contains("-")? ">=" : "<="): (iterConstantSubStr.contains("-")? ">" : "<"))+ startAndEnd[1].substring(0, startAndEnd[1].length()-1)+"; "+iterVar+"+="+ iterConstantSubStr +") {");
         } else if(inputLine.contains(":")){
             expression += "for(var "+inputLine.substring(4, inputLine.length()-2)+") {";
         } else {
@@ -342,7 +347,6 @@ public class Compiler {
         String name = "";
         if(nameMatcher.find())
             name = nameMatcher.group(0).substring(0, nameMatcher.group(0).length()-2);
-        System.out.println(name+"\n"+sentInput.substring(sentInput.indexOf(name)-2, sentInput.indexOf(name)));
         if(sentInput.substring(sentInput.indexOf(name)-2, sentInput.indexOf(name)).equals("::"))
             name = "get"+name.substring(0, 1).toUpperCase()+name.substring(1);
         Pattern indexPattern = Pattern.compile("(::[\\w]+|:\\[[\\w\\.\"\\(\\)]+\\])");
@@ -411,10 +415,10 @@ public class Compiler {
             type = "String";
         } else if(isChar(rightHandSide.trim())){
             type = "char";
-        } else if(isInt(rightHandSide.trim())) {
-            type = "int";
         } else if(isDouble(rightHandSide.trim())) {
             type = "double";
+        } else if(isInt(rightHandSide.trim())) {
+            type = "int";
         } else if(isBoolean(rightHandSide.trim())) {
             type = "boolean";
         } else /* is object */ {
@@ -537,7 +541,7 @@ public class Compiler {
         }
         Pattern objectPattern = Pattern.compile("[a-zA-Z\\d$_<>]*\\(");
         Matcher object = objectPattern.matcher(inputLine);
-        if(object.find()) {
+        if(object.find() && object.group(0).trim().equals("for(")) {
             String objectName = object.group(0).substring(0, object.group(0).length()-1);
             if(objectNames.contains(objectName)) {
                 String[] sides = expression.split("=");
@@ -643,6 +647,24 @@ public class Compiler {
         out.close();
     }
     public static void captureFunctions(String page) {
+        Pattern fnTypePattern = Pattern.compile("fn\\s[\\w]+\\s?\\(([\\w:,\\s]+)?\\)(\\s?=>\\s?[\\w]+)?");
+        Matcher fnTypeMatcher = fnTypePattern.matcher(page);
+        while(fnTypeMatcher.find()) {
+            Pattern namePattern = Pattern.compile("[\\w]+\\(");
+            Matcher nameMatcher = namePattern.matcher(fnTypeMatcher.group(0));
+            String name = "";
+            if(nameMatcher.find())
+                name = nameMatcher.group(0).trim();
+            if(fnTypeMatcher.group(0).contains("=>")) {
+                String type = "";
+                if(nameMatcher.find()) {
+                    type = fnTypeMatcher.group(0).split("=>")[1].substring(0, fnTypeMatcher.group(0).split("=>")[1].length()-1).trim();
+                }
+                variableTypes.put(name, type);
+            } else {
+                variableTypes.put(name, "void");
+            }
+        }
         boolean functionsRemaining = true;
         while (functionsRemaining) {
             int openingBrackets = 0, closingBrackets = 0;

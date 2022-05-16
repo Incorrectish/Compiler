@@ -1,8 +1,11 @@
-no std;
 fn main() {
-    let al = ArrayList<int>();
-    al.add(1);
-    al.add(2);
-    al.add(3);
-    println(al:[1]);
+for i: [1, 100] {
+if i%3 == 0 && i%5 == 0 {
+println("fizzbuzz");
+} else if i%3 == 0 {
+println("fizz");
+} else if i%5 == 0 {
+println("buzz");
+}
+}
 }
