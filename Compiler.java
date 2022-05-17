@@ -16,9 +16,11 @@ public class Compiler {
         ArrayList<String> dependencies = new ArrayList<>();
         // Reading the file
         String page = readLines(line, macros, dependencies, libraries);
+        page = page.replace(": bool", ": boolean");
+        page = page.replace("double(", "Double.parseDouble(");
+        page = page.replace("int(", "Integer.parseInt(");
         //removing comments in the form /* */ regular expression. Change it later.
-        String regex = "/\\*[^~]*\\*/";
-        Pattern pattern = Pattern.compile(regex);
+        Pattern pattern = Pattern.compile("/\\*[^~]*\\*/");
         Matcher matcher = pattern.matcher(page);
         page = matcher.replaceAll("");
         String className = line.split("\\.")[0];
@@ -26,7 +28,9 @@ public class Compiler {
         for(String macro: macros.keySet()) {
             page = page.replace(macro, macros.get(macro));
         }
-        captureFunctions(page);
+        for(var dependency: dependencies)
+            evaluateClass(dependency);
+        functionDefinitions = captureFunctions(page);
         // Creating compiler target file
         File compiled = new File(className+".java");
         compiled.createNewFile();
@@ -35,7 +39,6 @@ public class Compiler {
 //        evaluateFunctions(compiled);
 
         //splitting the file on semicolons: to change later
-        String[] lines = page.split(";");
         if(standard) {
             out.write("import java.util.*;\nimport java.io.*;\n");
             variableTypes.put("readLine", "String");
@@ -44,12 +47,10 @@ public class Compiler {
         }
         //write libraries, also you gotta figure out a language name
         for(String library: libraries)
-            out.write(library.replace("I", "java")+"\n");
+            out.write(library.replace(" I.", " java.")+"\n");
         //boiler plate
         out.write("public class "+className+" {\n");
 //        out.write("\t public static void main(String[] args) {\n");
-
-
         //evaluating all the functions
         for(String function: functionDefinitions) {
             String[] statements = function.split("[\r\n]+");
@@ -143,7 +144,7 @@ public class Compiler {
             }
             //read in dependencies
             else if(line.startsWith("use ")) {
-                dependencies.add(line.substring(3).trim());
+                dependencies.add(line);
             }
             //read in macros
             else if(line.startsWith("#define")) {
@@ -186,13 +187,23 @@ public class Compiler {
         } else if(inputLine.startsWith("print(") || inputLine.startsWith("println(")) {
             //get the implicit arrays.tostring
             expression = "System.out."+evaluateRHS(inputLine);
-        } else if((inputLine.contains(" = "))) {
+        }  else if((inputLine.contains(" = "))) {
             String sentInput = replace.replace("<double>", "<Double>").replace("string[]", "String[]");
             // left hand side stuff
            expression = checkObjects(evaluateLHS(sentInput));
             //
+        } else if(inputLine.contains("struct ")) {
+            if(inputLine.startsWith("pub "))
+                expression+="public ";
+            else
+                expression+="private ";
+            if(inputLine.contains("stat "))
+                expression+="static ";
+            String[] tokens = inputLine.split(" ");
+            String name = tokens[tokens.length-1];
+            expression+=(name+" {");
         } else if(inputLine.contains("fn ")) {
-            inputLine.replace("string", "String");
+            inputLine = inputLine.replace("string", "String");
           if(inputLine.contains("pub "))
               expression+="public ";
           else
@@ -236,17 +247,17 @@ public class Compiler {
           }
           if(inputLine.trim().equals("fn main() {") || inputLine.trim().equals("fn main () {"))
               expression = "public static void main(String[] args) {";
-        } else if(inputLine.startsWith("for")) {
+        }  else if(inputLine.startsWith("for ")) {
             expression = evaluateForLoop(inputLine);
-        } else if(inputLine.startsWith("do")) {
+        } else if(inputLine.startsWith("do ")) {
             expression = inputLine;
-        } else if(inputLine.startsWith("while")) {
+        } else if(inputLine.startsWith("while ")) {
             expression = evaluateConditional(inputLine);
-        } else if(inputLine.startsWith("if")) {
+        } else if(inputLine.startsWith("if ")) {
             expression = evaluateConditional(inputLine);
-        } else if(inputLine.startsWith("else if")) {
+        } else if(inputLine.startsWith("else if ")) {
             expression = evaluateConditional(inputLine);
-        } else if(inputLine.startsWith("else")) {
+        } else if(inputLine.startsWith("else ")) {
             expression = inputLine;
         } else if(inputLine.startsWith("}")) {
             if(inputLine.trim().equals("}"))
@@ -254,7 +265,17 @@ public class Compiler {
             else
                 expression = "} "+evaluateConditional(inputLine.substring(1).trim());
         } else {
-            expression = inputLine;
+            Pattern namePattern = Pattern.compile("[\\w]+:\\s[\\w]+;");
+            Matcher nameMatcher = namePattern.matcher(inputLine);
+            String[] tokens;
+            if(nameMatcher.find()) {
+                String declare = nameMatcher.group(0).replace(";", "");
+                String[] tokens1 = declare.split(": ");
+                expression = inputLine.replace(nameMatcher.group(0), tokens1[1]+" "+tokens1[0]);
+            } else {
+                expression = inputLine;
+            }
+
         }
         return evaluateLHS(expression);
     }
@@ -262,9 +283,11 @@ public class Compiler {
     private static String checkObjects(String inputLine) {
         Pattern pattern = Pattern.compile("[\\w<>]+\\(");
         Matcher matcher = pattern.matcher(inputLine);
-        if(matcher.find() && !variableTypes.containsKey(matcher.group(0).substring(0, matcher.group(0).length()-1))) {
+        Pattern pattern1 = Pattern.compile("\\.[\\w<>]+\\(");
+        Matcher matcher1 = pattern1.matcher(inputLine);
+        if(matcher.find() && !variableTypes.containsKey(matcher.group(0).substring(0, matcher.group(0).length()-1)) && !matcher1.find()) {
             int toSplit = inputLine.indexOf("=");
-            inputLine = inputLine.substring(0, toSplit+1) + "new "+inputLine.substring(toSplit+1);
+            inputLine = inputLine.substring(0, toSplit+1) + " new "+inputLine.substring(toSplit+1);
         }
         return inputLine;
     }
@@ -308,7 +331,7 @@ public class Compiler {
             expression+=iterVar;
             Pattern iterConstantPattern = Pattern.compile(";\\s?[\\w-]+\\s?\\{");
             Matcher iterConstantMatcher = iterConstantPattern.matcher(inputLine);
-            String iterConstant = ";1 {";
+            String iterConstant = "; 1 {";
             if(iterConstantMatcher.find())
                 iterConstant = iterConstantMatcher.group(0);
             Pattern range = Pattern.compile("(\\[|\\()[\\w\\.]+,\\s[\\w\\.]+(\\]|\\))");
@@ -646,7 +669,193 @@ public class Compiler {
         }
         out.close();
     }
-    public static void captureFunctions(String page) {
+//    public static void captureFunctions(String page) {
+//        Pattern fnTypePattern = Pattern.compile("fn\\s[\\w]+\\s?\\(([\\w:,\\s]+)?\\)(\\s?=>\\s?[\\w]+)?");
+//        Matcher fnTypeMatcher = fnTypePattern.matcher(page);
+//        while(fnTypeMatcher.find()) {
+//            Pattern namePattern = Pattern.compile("[\\w]+\\(");
+//            Matcher nameMatcher = namePattern.matcher(fnTypeMatcher.group(0));
+//            String name = "";
+//            if(nameMatcher.find())
+//                name = nameMatcher.group(0).trim();
+//            if(fnTypeMatcher.group(0).contains("=>")) {
+//                String type = "";
+//                if(nameMatcher.find()) {
+//                    type = fnTypeMatcher.group(0).split("=>")[1].substring(0, fnTypeMatcher.group(0).split("=>")[1].length()-1).trim();
+//                }
+//                variableTypes.put(name, type);
+//            } else {
+//                variableTypes.put(name, "void");
+//            }
+//        }
+//        boolean functionsRemaining = true;
+//        while (functionsRemaining) {
+//            int openingBrackets = 0, closingBrackets = 0;
+//            if (page.contains("pub stat fn")) {
+//                StringBuilder functionBuilder = new StringBuilder();
+//                int begin = page.indexOf("pub stat fn");
+//                begin = page.indexOf("n", begin)+1;
+//                functionBuilder.append("pub stat fn");
+//                while(page.charAt(begin) != '{') {
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                }
+//                do {
+//                    if(page.charAt(begin) == '{') {
+//                        openingBrackets++;
+//                    } else if(page.charAt(begin) == '}') {
+//                        closingBrackets++;
+//                    }
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                } while(openingBrackets > closingBrackets);
+//                String function = functionBuilder.toString();
+//                functionDefinitions.add(function);
+//                page = page.replace(function, "");
+//            } else if (page.contains("pub fn")) {
+//                StringBuilder functionBuilder = new StringBuilder();
+//                int begin = page.indexOf("pub fn");
+//                begin = page.indexOf("n", begin)+1;
+//                functionBuilder.append("pub fn");
+//                while(page.charAt(begin) != '{') {
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                }
+//                do {
+//                    if(page.charAt(begin) == '{') {
+//                        openingBrackets++;
+//                    } else if(page.charAt(begin) == '}') {
+//                        closingBrackets++;
+//                    }
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                } while(openingBrackets > closingBrackets);
+//                String function = functionBuilder.toString();
+//                functionDefinitions.add(function);
+//                page = page.replace(function, "");
+//            } else if (page.contains("stat fn")) {
+//                StringBuilder functionBuilder = new StringBuilder();
+//                int begin = page.indexOf("stat fn");
+//                begin = page.indexOf("n", begin)+1;
+//                functionBuilder.append("stat fn");
+//                while(page.charAt(begin) != '{') {
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                }
+//                do {
+//                    if(page.charAt(begin) == '{') {
+//                        openingBrackets++;
+//                    } else if(page.charAt(begin) == '}') {
+//                        closingBrackets++;
+//                    }
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                } while(openingBrackets > closingBrackets);
+//                String function = functionBuilder.toString();
+//                functionDefinitions.add(function);
+//                page = page.replace(function, "");
+//            } else if(page.contains("fn")) {
+//                StringBuilder functionBuilder = new StringBuilder();
+//                int begin = page.indexOf("fn");
+//                begin = page.indexOf("n", begin)+1;
+//                functionBuilder.append("fn");
+//                while(page.charAt(begin) != '{') {
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                }
+//                do {
+//                    if(page.charAt(begin) == '{') {
+//                        openingBrackets++;
+//                    } else if(page.charAt(begin) == '}') {
+//                        closingBrackets++;
+//                    }
+//                    functionBuilder.append(page.charAt(begin));
+//                    begin++;
+//                } while(openingBrackets > closingBrackets);
+//                String function = functionBuilder.toString();
+//                functionDefinitions.add(function);
+//                page = page.replace(function, "");
+//            } else /* no functions remaining */ {
+//                functionsRemaining = false;
+//            }
+//        }
+//    }
+    public static void evaluateClass(String file) throws IOException {
+        String classPath = file.substring(4, file.length()-1).trim();
+        BufferedReader br = new BufferedReader(new FileReader(new File(classPath)));
+        File compiledClass = new File(classPath.replace(".i", ".java"));
+        compiledClass.createNewFile();
+        String className = compiledClass.getName().substring(0, compiledClass.getName().length()-5);
+        PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(compiledClass)));
+        boolean standardClass = true;
+        HashMap<String, String> macrosClass = new HashMap<>();
+        HashSet<String> librariesClass = new HashSet<>();
+        String line;
+        StringBuilder pageBuilder = new StringBuilder();
+        while((line = br.readLine()) != null) {
+            if(line.trim().equals("#no std;")) {
+                standardClass = false;
+            }
+            else if(line.startsWith("import")) {
+                librariesClass.add(line);
+            }
+            //read in dependencies
+            //read in macros
+            else if(line.startsWith("#define")) {
+                String[] macro = line.substring(7).trim().split("as");
+                macrosClass.put(macro[0].trim(), macro[1].trim());
+            }
+            //if the line is not a comment
+            else if (((line = line.trim()).length() >= 2 && (line.charAt(0) != '/' || line.charAt(1) != '/')) || line.equals("{") || line.equals("}")) {
+                pageBuilder.append(line).append("\n");
+            }
+        }
+        String page = pageBuilder.toString();
+        br.close();
+        for(var i: macrosClass.keySet())
+            page.replace(i, macrosClass.get(i));
+        page = page.replaceAll("=>\\s?string", "==> String");
+        page = page.replaceAll(": string", ": String");
+        for(var i: librariesClass)
+            out.write(i.replace(" I.", " java.")+"\n");
+        if(standardClass)
+            out.write("import java.util.*;\nimport java.io.*;\n");
+        out.write("public class "+className+" {\n");
+        Pattern attributesPattern = Pattern.compile("\\{[[\\w]+:\\s[\\w]+,\\s]+");
+        Matcher attributeMatcher = attributesPattern.matcher(page);
+        String attributeString = "";
+        if(attributeMatcher.find())
+            attributeString = attributeMatcher.group(0).substring(1);
+        String[] attributes = attributeString.split(",\\s");
+        StringBuilder constructor = new StringBuilder("public " + className + " (");
+        StringBuilder constructorBody = new StringBuilder();
+        for(String attribute: attributes) {
+            StringBuilder expressionBuilder = new StringBuilder();
+            String[] nameAndType = attribute.split(":\\s");
+            constructor.append(nameAndType[1].trim()).append(" ").append(nameAndType[0]+", ");
+            constructorBody.append("this.").append(nameAndType[0].trim()).append(" = ").append(nameAndType[0]).append(";\n");
+            expressionBuilder.append("private ").append(nameAndType[1]).append(" ").append(nameAndType[0]).append(";\n\n");
+            expressionBuilder.append("public ").append(nameAndType[1]).append(" get").append(nameAndType[1].substring(0, 1).toUpperCase()).append(nameAndType[1].substring(1)).append("() {\n").append("return ").append(nameAndType[0]).append(";\n").append("}\n\n");
+            expressionBuilder.append("public void set").append(nameAndType[1].substring(0, 1).toUpperCase()).append(nameAndType[1].substring(1)).append("(").append(nameAndType[1]).append(" ").append(nameAndType[0]).append(") {\n").append("this.").append(nameAndType[0].trim()).append(" = ").append(nameAndType[0]).append(";\n").append("}\n");
+            out.write(expressionBuilder.toString()+"\n");
+        }
+        String constructorString = constructor.toString();
+        constructorString = constructorString.substring(0, constructorString.length()-2)+") {\n";
+        constructorString = constructorString+constructorBody.toString()+"}\n";
+        out.write(constructorString+"\n");
+        HashSet<String> functionClassDefinitions = captureFunctions(page);
+        for(String function: functionClassDefinitions) {
+            String[] statements = function.split("[\r\n]+");
+            for(String statement: statements) {
+                String state = evaluateStatement(statement.trim()).trim();
+                out.write(state+"\n");
+            }
+        }
+        out.write("}");
+        out.close();
+    }
+    public static HashSet<String> captureFunctions(String page) {
+        HashSet<String> functionClassDefinitions = new HashSet<>();
         Pattern fnTypePattern = Pattern.compile("fn\\s[\\w]+\\s?\\(([\\w:,\\s]+)?\\)(\\s?=>\\s?[\\w]+)?");
         Matcher fnTypeMatcher = fnTypePattern.matcher(page);
         while(fnTypeMatcher.find()) {
@@ -687,7 +896,7 @@ public class Compiler {
                     begin++;
                 } while(openingBrackets > closingBrackets);
                 String function = functionBuilder.toString();
-                functionDefinitions.add(function);
+                functionClassDefinitions.add(function);
                 page = page.replace(function, "");
             } else if (page.contains("pub fn")) {
                 StringBuilder functionBuilder = new StringBuilder();
@@ -708,7 +917,7 @@ public class Compiler {
                     begin++;
                 } while(openingBrackets > closingBrackets);
                 String function = functionBuilder.toString();
-                functionDefinitions.add(function);
+                functionClassDefinitions.add(function);
                 page = page.replace(function, "");
             } else if (page.contains("stat fn")) {
                 StringBuilder functionBuilder = new StringBuilder();
@@ -729,7 +938,7 @@ public class Compiler {
                     begin++;
                 } while(openingBrackets > closingBrackets);
                 String function = functionBuilder.toString();
-                functionDefinitions.add(function);
+                functionClassDefinitions.add(function);
                 page = page.replace(function, "");
             } else if(page.contains("fn")) {
                 StringBuilder functionBuilder = new StringBuilder();
@@ -750,11 +959,12 @@ public class Compiler {
                     begin++;
                 } while(openingBrackets > closingBrackets);
                 String function = functionBuilder.toString();
-                functionDefinitions.add(function);
+                functionClassDefinitions.add(function);
                 page = page.replace(function, "");
             } else /* no functions remaining */ {
                 functionsRemaining = false;
             }
         }
+        return functionClassDefinitions;
     }
 }

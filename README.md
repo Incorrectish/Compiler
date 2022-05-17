@@ -2,9 +2,9 @@ The syntax of this language is fairly similar to Java and Rust
 First definitions:  
 Variables can be defined with the let name: type syntax.  
 Variables are immutable by default, and type inference has been created.  
-For example:
-let x = 4;
-    ^ created an immutable integer with a value of 4
+For example: 
+let x = 4; 
+    ^ created an immutable integer with a value of 4  
 let y: mut = "Hello";
 	^ created a mutable string with a value of "Hello". Note: The space after the colon is IMPORTANT, do not forget it or you will get a syntax error
 For objects and arrays, you MUST explicitly define the type

@@ -1,0 +1,6 @@
+parse struct [name] { => public class [name] {
+parse stat struct [name] { => static class [name] {
+Attributes: {[name]: [type], [name]: type} => [private [type] [name], private [type] [name]] + public [type] getName() { return name } + public void setName([name]: [type]) {this.[name] = [name]}, etc
+wtv: int => private int wtv;
+pub stat wtv2: int => public static int wtv2
+
